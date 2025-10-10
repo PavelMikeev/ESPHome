@@ -1,0 +1,168 @@
+substitutions:
+  name: "mj-s01-switch"
+  friendly_name: "Martin Jerry MJ-S01 (Single Pole switch)"
+  device_description: "Martin Jerry mj-s01 wifi switch"
+  project_name: "Martin Jerry.MJ-S01"
+  project_version: "v1.2.0"
+  dns_domain: ".local"
+  wifi_fast_connect: false
+  log_level: "DEBUG"
+  ipv6_enable: false
+  icon: "mdi:ceiling-light"
+
+
+esphome:
+  name: ${name}
+  friendly_name: "${friendly_name}"
+  comment: "${device_description}"
+  name_add_mac_suffix: true
+  min_version: 2024.6.0
+  project:
+    name: "${project_name}"
+    version: "${project_version}"
+
+esp8266:
+  board: esp01_1m
+  restore_from_flash: false
+
+preferences:
+  flash_write_interval: 7d
+
+logger:
+  level: ${log_level}
+  baud_rate: 0
+
+api:
+  reboot_timeout: 15min
+
+ota:
+  - platform: esphome
+
+web_server:
+  port: 80
+
+network:
+  enable_ipv6: ${ipv6_enable}
+
+wifi:
+  ap: {}
+
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  fast_connect: ${wifi_fast_connect}
+  domain: "${dns_domain}"
+
+  power_save_mode: LIGHT
+  output_power: 17dB
+  reboot_timeout: 15min
+
+  on_disconnect:
+    - switch.turn_on: red_led_blink
+  on_connect:
+    - switch.turn_off: red_led_blink
+
+mdns:
+  disabled: false
+
+captive_portal:
+
+switch:
+  - platform: gpio
+    id: relay
+    name: "Light Switch"
+    icon: "${icon}"
+    pin: GPIO12
+    restore_mode: ALWAYS_OFF
+    on_turn_on:
+      - switch.turn_on: blue_led
+    on_turn_off:
+      - switch.turn_off: blue_led
+
+  - platform: gpio
+    id: blue_led
+    pin: GPIO05
+    inverted: true
+    internal: true
+
+  - platform: gpio
+    id: red_led
+    pin: GPIO04
+    inverted: true
+    internal: true
+
+  - platform: template
+    id: red_led_blink
+    internal: true
+    lambda: |-
+      return false;
+    turn_on_action:
+      - while:
+          condition:
+            not:
+              wifi.connected:
+          then:
+            - switch.turn_on: red_led
+            - delay: 500ms
+            - switch.turn_off: red_led
+            - delay: 500ms
+    turn_off_action:
+      - switch.turn_off: red_led
+
+binary_sensor:
+  - platform: gpio
+    id: main_button
+    pin:
+      number: GPIO13
+      mode: INPUT_PULLUP
+    internal: true
+    filters:
+      - delayed_on: 12ms
+      - delayed_off: 12ms
+    on_press:
+      - switch.toggle: relay
+
+button:
+  - platform: restart
+    id: restart_button
+    name: "Restart Device"
+    entity_category: diagnostic
+
+sensor:
+  - platform: uptime
+    id: uptime_seconds
+
+  - platform: wifi_signal
+    name: "WiFi Signal dB"
+    update_interval: 60s
+    entity_category: diagnostic
+
+text_sensor:
+  - platform: template
+    name: "Uptime"
+    icon: mdi:clock-start
+    entity_category: diagnostic
+    lambda: |-
+      uint32_t s = (uint32_t) id(uptime_seconds).state;
+      if (s == 0 || s > 315576000U) {
+        return {"Starting up"};
+      }
+      uint32_t d = s / 86400U; s %= 86400U;
+      uint8_t  h = s / 3600U; s %= 3600U;
+      uint8_t  m = s / 60U;   s %= 60U;
+      char buf[40];
+      if (d)       snprintf(buf, sizeof(buf), "%ud %uh %um %us", (unsigned)d, h, m, (unsigned)s);
+      else if (h)  snprintf(buf, sizeof(buf), "%uh %um %us", h, m, (unsigned)s);
+      else if (m)  snprintf(buf, sizeof(buf), "%um %us", m, (unsigned)s);
+      else         snprintf(buf, sizeof(buf), "%us", (unsigned)s);
+      return std::string(buf);
+
+  - platform: wifi_info
+    ip_address:
+      name: "IP Address"
+      entity_category: diagnostic
+    mac_address:
+      name: "MAC Address"
+      entity_category: diagnostic
+    ssid:
+      name: "Connected SSID"
+      entity_category: diagnostic
