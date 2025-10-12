@@ -1,3 +1,40 @@
+#
+# Martin Jerry US‑SS01 (WB2S/BK72xx) ESPHome configuration (Adoptable)
+#
+# What this file does (TL;DR)
+#   Sets up a reliable single‑pole switch on BK7231 (WB2S)
+#   Handles Wi‑Fi/AP, OTA, API, web UI, and mDNS for adoption
+#   Uses a red status LED to blink on Wi‑Fi loss and a blue LED to mirror relay state
+#   Debounces the physical button and toggles the relay
+#   Minimizes flash wear (preferences.flash_write_interval)
+#
+# Hardware pin map (US‑SS01 WB2S reference)
+#   Relay:        P8   (active HIGH)
+#   Blue LED:     P26  (active LOW, inverted) mirrors relay state
+#   Red  LED:     P24  (active LOW, inverted) blinks when Wi‑Fi is disconnected
+#   Button:       P10  (input + pullup, active LOW)
+#
+# Secrets you MUST provide yourself
+#   wifi_ssid and wifi_password are referenced with !secret below and must be defined
+#   by you in your ESPHome/Home Assistant secrets.yaml. Example:
+#     wifi_ssid: "MyHomeWiFi"
+#     wifi_password: "super_secret_password"
+#   If you do not use secrets, replace the !secret lines with literal strings.
+#
+# Adoption via ESPHome Dashboard
+#   This config supports adoption; add/update the dashboard_import URL below to your public GitHub file.
+#   First boot exposes an open AP (ap: {}) so you can provision Wi‑Fi.
+#
+# Tuning notes
+#   wifi_fast_connect: false by default for stable roaming; set to true for faster reconnects.
+#   power_save_mode: NONE chosen here for best responsiveness on BK72xx; use LIGHT if you need saving.
+#   restore_mode: ALWAYS_OFF starts the relay off after power loss; change if you need state restore.
+#
+# Safety & maintenance
+#   logger.baud_rate is 0 to avoid serial logging overhead on BK chips.
+#   api.reboot_timeout and wifi.reboot_timeout ensure the device self‑recovers after long outages.
+#   preferences.flash_write_interval limits writes to reduce flash wear.
+#
 substitutions:
   name: "mj-us-ss01-switch"
   friendly_name: "Martin Jerry US-SS01 (WB2S)"
@@ -62,6 +99,10 @@ mdns:
   disabled: false
 
 captive_portal:
+
+# Allow adoption/import directly from GitHub
+dashboard_import:
+  package_import_url: "github://PavelMikeev/ESPHome/ESPHome/martin-jerry-us-ss01-wb2s.yaml"
 
 switch:
   - platform: gpio

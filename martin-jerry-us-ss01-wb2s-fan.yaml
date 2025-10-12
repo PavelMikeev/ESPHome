@@ -1,3 +1,35 @@
+#
+# Martin Jerry US‑SS01 (WB2S/BK72xx) Fan‑domain variant for better HA adoption
+#
+# Purpose
+#   This config is functionally identical to the switch version but exposes a native
+#   Home Assistant Fan entity (domain: fan) for better UX, icons, and automation fit.
+#   The physical relay is the same; the fan entity simply mirrors ON/OFF to the relay.
+#
+# Hardware pin map (US‑SS01 WB2S reference)
+#   Relay:        P8   (active HIGH)
+#   Blue LED:     P26  (active LOW, inverted) mirrors relay state
+#   Red  LED:     P24  (active LOW, inverted) blinks when Wi‑Fi is disconnected
+#   Button:       P10  (input + pullup, active LOW)
+#
+# Secrets you MUST provide yourself
+#   wifi_ssid and wifi_password are referenced with !secret below and must be defined
+#   by you in your ESPHome/Home Assistant secrets.yaml. Example:
+#     wifi_ssid: "MyHomeWiFi"
+#     wifi_password: "super_secret_password"
+#   If you do not use secrets, replace the !secret lines with literal strings.
+#
+# Behavior & reliability
+#   logger.baud_rate is 0 to avoid serial logging overhead on BK chips.
+#   api.reboot_timeout and wifi.reboot_timeout ensure self‑recovery after long outages.
+#   preferences.flash_write_interval minimizes flash wear (10 minutes).
+#   Wi‑Fi power saving is disabled (power_save_mode: NONE) for responsiveness.
+#   Button toggles the fan entity; the relay follows the fan state.
+#
+# Adoption via ESPHome Dashboard
+#   Add/update the dashboard_import URL below to your public GitHub file so the device
+#   can be discovered and adopted from the ESPHome Dashboard.
+#
 substitutions:
   name: "mj-us-ss01-fan"
   friendly_name: "Martin Jerry US-SS01 Fan (WB2S)"
@@ -62,6 +94,10 @@ mdns:
   disabled: false
 
 captive_portal:
+
+# Allow adoption/import directly from GitHub
+dashboard_import:
+  package_import_url: "github://PavelMikeev/ESPHome/ESPHome/martin-jerry-us-ss01-wb2s-fan.yaml"
 
 switch:
   - platform: gpio

@@ -1,3 +1,38 @@
+#
+# Moes 2‑Gang (BK72xx CBU) ESPHome configuration (Adoptable)
+#
+# Purpose
+#   Two independent relays (Ceiling + LED Strip) on BK7231N (board: cbu).
+#   Wi‑Fi/AP, OTA, API, web UI, and mDNS for adoption.
+#   White LEDs used for Wi‑Fi fault indication (blink when Wi‑Fi is disconnected).
+#   This version is tailored to my needs; you can repurpose the white LED indication
+#   from “LED Strip” and “Ceiling” to any roles you prefer just swap the actions.
+#
+# Hardware pin map
+#   Relay1 (Ceiling):    P24 (active HIGH)
+#   Relay2 (LED Strip):  P26 (active HIGH)
+#   White LED (Ceiling): P14 (active LOW, inverted)
+#   White LED (Strip):   P20 (active LOW, inverted)
+#   Button1 (Ceiling):   P23 (INPUT_PULLUP, active LOW)
+#   Button2 (Strip):     P28 (INPUT, active HIGH)
+#
+# Secrets you MUST provide yourself
+#   wifi_ssid and wifi_password are referenced with !secret below and must be defined
+#   by you in your ESPHome/Home Assistant secrets.yaml. Example:
+#     wifi_ssid: "MyHomeWiFi"
+#     wifi_password: "super_secret_password"
+#   If you do not use secrets, replace the !secret lines with literal strings.
+#
+# Reliability & tuning
+#   logger.baud_rate is 0 to avoid serial logging overhead on BK chips.
+#   api.reboot_timeout and wifi.reboot_timeout ensure self‑recovery after long outages.
+#   preferences.flash_write_interval minimizes flash wear (10 minutes).
+#   Wi‑Fi power saving is disabled (power_save_mode: NONE) for responsiveness.
+#
+# Adoption via ESPHome Dashboard
+#   Add/update the dashboard_import URL below to your public GitHub file so the device
+#   can be discovered and adopted from the ESPHome Dashboard.
+#
 substitutions:
   name: "moes-2gang-switch"
   friendly_name: "Moes 2-Gang switch"
@@ -64,6 +99,10 @@ mdns:
 
 captive_portal:
 
+# Allow adoption/import directly from GitHub
+dashboard_import:
+  package_import_url: "github://PavelMikeev/ESPHome/ESPHome/moes-2-gang-cbu.yaml"
+
 switch:
   # Relay 1: Ceiling
   - platform: gpio
@@ -94,7 +133,7 @@ switch:
     inverted: true
     internal: true
 
-  # MJ‑S01‑style Wi‑Fi blink (blink both white LEDs when Wi‑Fi is disconnected)
+  # Wi‑Fi blink (blink both white LEDs when Wi‑Fi is disconnected)
   - platform: template
     id: wifi_blink
     internal: true
