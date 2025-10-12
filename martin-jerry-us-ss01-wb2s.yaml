@@ -12,7 +12,7 @@ substitutions:
 
 esphome:
   name: ${name}
-  friendly_name: "${friendly_name}"
+  friendly_name: ${friendly_name}
   comment: "${device_description}"
   name_add_mac_suffix: true
   min_version: 2024.6.0

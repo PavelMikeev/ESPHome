@@ -1,18 +1,19 @@
 substitutions:
-  name: "mj-us-ss01-fan"
-  friendly_name: "Martin Jerry US-SS01 Fan (WB2S)"
-  device_description: "Martin Jerry US-SS01 WiFi fan"
-  project_name: "Martin Jerry.US-SS01-FAN"
+  name: "mj-us-ss02"
+  friendly_name: "Martin Jerry US-SS02"
+  device_description: "US-SS02 fan switch with HDC1080 (ESP8266)"
+  project_name: "Martin Jerry.US-SS02"
   project_version: "v1.0.0"
   dns_domain: ".local"
   wifi_fast_connect: false
   log_level: "INFO"
   ipv6_enable: false
-  icon: "mdi:fan"
+  icon_fan: "mdi:fan"
+  icon_led: "mdi:led"
 
 esphome:
   name: ${name}
-  friendly_name: "${friendly_name}"
+  friendly_name: ${friendly_name}
   comment: "${device_description}"
   name_add_mac_suffix: true
   min_version: 2024.6.0
@@ -20,15 +21,16 @@ esphome:
     name: "${project_name}"
     version: "${project_version}"
 
-bk72xx:
-  board: wb2s
+esp8266:
+  board: esp01_1m
+  restore_from_flash: false
 
 preferences:
   flash_write_interval: 10min
 
 logger:
   level: ${log_level}
-  baud_rate: 0
+  baud_rate: 0    # RX0 used as button; disable UART logs
 
 api:
   reboot_timeout: 15min
@@ -50,7 +52,8 @@ wifi:
   fast_connect: ${wifi_fast_connect}
   domain: "${dns_domain}"
 
-  power_save_mode: NONE
+  power_save_mode: LIGHT
+  output_power: 17dB
   reboot_timeout: 15min
 
   on_disconnect:
@@ -63,13 +66,17 @@ mdns:
 
 captive_portal:
 
+i2c:
+  sda: GPIO13
+  scl: GPIO04
+  scan: true
+
 switch:
   - platform: gpio
     id: relay
-    name: "Fan Switch"
-    icon: "${icon}"
-    pin: P8
-    internal: true
+    name: "Fan"
+    icon: "${icon_fan}"
+    pin: GPIO05
     restore_mode: ALWAYS_OFF
     on_turn_on:
       - switch.turn_on: blue_led
@@ -78,13 +85,13 @@ switch:
 
   - platform: gpio
     id: blue_led
-    pin: P26
+    pin: GPIO14
     inverted: true
     internal: true
 
   - platform: gpio
     id: red_led
-    pin: P24
+    pin: GPIO12
     inverted: true
     internal: true
 
@@ -110,35 +117,42 @@ binary_sensor:
   - platform: gpio
     id: main_button
     pin:
-      number: P10
-      mode:
-        input: true
-        pullup: true
+      number: GPIO03
+      mode: INPUT_PULLUP
       inverted: true
     internal: true
     filters:
       - delayed_on: 12ms
       - delayed_off: 12ms
     on_press:
-      - fan.toggle: fan_entity
-
-fan:
-  - platform: template
-    name: "Fan"
-    id: fan_entity
-    icon: "mdi:fan"
-    on_turn_on:
-      - switch.turn_on: relay
-    on_turn_off:
-      - switch.turn_off: relay
-
-button:
-  - platform: restart
-    id: restart_button
-    name: "Restart Device"
-    entity_category: diagnostic
+      - switch.toggle: relay
 
 sensor:
+  # HDC1080 temperature and humidity at 14-bit, with filtering/calibration hooks
+  - platform: hdc1080
+    address: 0x40
+    update_interval: 30s
+    temperature:
+      name: "Temperature"
+      id: temp
+      filters:
+        # Reduce noise and self-heating bias; tune offset after comparison
+        - sliding_window_moving_average:
+            window_size: 5
+            send_every: 1
+        # Example offset; adjust to your calibration (+/-)
+        # - offset: -0.3
+    humidity:
+      name: "Humidity"
+      id: hum
+      filters:
+        - sliding_window_moving_average:
+            window_size: 5
+            send_every: 1
+        - clamp:
+            min: 0
+            max: 100
+
   - platform: uptime
     id: uptime_seconds
 

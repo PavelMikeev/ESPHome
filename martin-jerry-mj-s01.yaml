@@ -1,0 +1,225 @@
+#
+# Martin Jerry MJ‑S01 ESPHome configuration (Adoptable)
+#
+# What this file does (TL;DR)
+#  Sets up a reliable single‑pole wall switch on ESP8266 (esp01_1m)
+#  Handles Wi‑Fi/AP, OTA, API, web UI, and mDNS for easy adoption
+#  Uses a red status LED to blink on Wi‑Fi loss and a blue LED to mirror relay state
+#  Debounces the physical button and toggles the relay
+#  Minimizes flash wear (preferences.flash_write_interval)
+#
+# Hardware pin map (MJ‑S01 reference)
+#  Relay:        GPIO12 (active HIGH)
+#  Blue LED:     GPIO05 (active LOW, inverted) mirrors relay state
+#  Red LED:      GPIO04 (active LOW, inverted) blinks when Wi‑Fi is disconnected
+#  Button:       GPIO13 (INPUT_PULLUP, active LOW)
+#
+# Secrets you MUST provide yourself
+#   wifi_ssid and wifi_password are referenced with !secret below and must be defined
+#   by you in your ESPHome/Home Assistant secrets.yaml. Example:
+#     wifi_ssid: "MyHomeWiFi"
+#     wifi_password: "super_secret_password"
+#   If you do not use secrets, replace the !secret lines with literal strings.
+#
+# Adoption via ESPHome Dashboard
+#   This config includes dashboard_import pointing at the public GitHub file so it can be
+#   discovered and adopted from the ESPHome Dashboard.
+#   First boot exposes an open AP (ap: {}) so you can provision Wi‑Fi.
+#
+# Tuning notes
+#   wifi_fast_connect: false by default for better roaming stability; set to true to
+#   speed up reconnection when SSID is known.
+#   power_save_mode: LIGHT balances reliability and power usage on ESP8266; set to NONE
+#   if your network is very latency sensitive, or to HIGH for max saving (not recommended here).
+#   output_power: 17dB is a reasonable default; you can adjust between ~8–20dB depending on range.
+#   restore_mode: ALWAYS_OFF starts the relay off after power loss; change if you need state restore.
+#
+# Safety & maintenance
+#   logger.baud_rate is 0 to avoid occupying the hardware UART with logs.
+#   api.reboot_timeout and wifi.reboot_timeout ensure the device self‑recovers after long outages.
+#   preferences.flash_write_interval limits writes to reduce flash wear.
+#
+substitutions:
+  name: "mj-s01-switch"
+  friendly_name: "Martin Jerry MJ-S01 (Single Pole switch)"
+  device_description: "Martin Jerry mj-s01 wifi switch"
+  project_name: "Martin Jerry.MJ-S01"
+  project_version: "v1.2.0"
+  dns_domain: ".local"
+  wifi_fast_connect: false
+  log_level: "DEBUG"
+  ipv6_enable: false
+  icon: "mdi:ceiling-light"
+
+
+# Core metadata for ESPHome & project identification (helps adoption)
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  comment: "${device_description}"
+  name_add_mac_suffix: true
+  min_version: 2024.6.0
+  project:
+    name: "${project_name}"
+    version: "${project_version}"
+
+# Target platform
+esp8266:
+  board: esp01_1m
+  restore_from_flash: false
+
+# Reduce flash wear (affects how often ESPHome stores state/preferences)
+preferences:
+  flash_write_interval: 10min
+
+# Logging (set via substitutions.log_level). UART is disabled to free the serial pins.
+logger:
+  level: ${log_level}
+  baud_rate: 0
+
+# Native API for Home Assistant; includes self‑recovery watchdog
+api:
+  reboot_timeout: 15min
+
+# OTA updates from ESPHome Dashboard
+ota:
+  - platform: esphome
+
+# Lightweight web UI for quick checks
+web_server:
+  port: 80
+
+# Network options
+network:
+  enable_ipv6: ${ipv6_enable}
+
+# Wi‑Fi + captive portal for first‑boot provisioning
+wifi:
+  ap: {}
+
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  fast_connect: ${wifi_fast_connect}
+  domain: "${dns_domain}"
+
+  power_save_mode: LIGHT
+  output_power: 17dB
+  reboot_timeout: 15min
+
+  on_disconnect:
+    - switch.turn_on: red_led_blink
+  on_connect:
+    - switch.turn_off: red_led_blink
+
+# Local discovery
+mdns:
+  disabled: false
+
+captive_portal:
+
+# Allow adoption/import directly from GitHub
+dashboard_import:
+  package_import_url: "github://PavelMikeev/ESPHome/ESPHome/martin-jerry-mj-s01.yaml"
+
+# Switches: relay + LEDs and a template switch for Wi‑Fi blink
+switch:
+  - platform: gpio
+    id: relay
+    name: "Light Switch"
+    icon: "${icon}"
+    pin: GPIO12
+    restore_mode: ALWAYS_OFF
+    on_turn_on:
+      - switch.turn_on: blue_led
+    on_turn_off:
+      - switch.turn_off: blue_led
+
+  - platform: gpio
+    id: blue_led
+    pin: GPIO05
+    inverted: true
+    internal: true
+
+  - platform: gpio
+    id: red_led
+    pin: GPIO04
+    inverted: true
+    internal: true
+
+  - platform: template
+    id: red_led_blink
+    internal: true
+    lambda: |-
+      return false;
+    turn_on_action:
+      - while:
+          condition:
+            not:
+              wifi.connected:
+          then:
+            - switch.turn_on: red_led
+            - delay: 500ms
+            - switch.turn_off: red_led
+            - delay: 500ms
+    turn_off_action:
+      - switch.turn_off: red_led
+
+# Debounced physical button toggles the relay
+binary_sensor:
+  - platform: gpio
+    id: main_button
+    pin:
+      number: GPIO13
+      mode: INPUT_PULLUP
+    internal: true
+    filters:
+      - delayed_on: 12ms
+      - delayed_off: 12ms
+    on_press:
+      - switch.toggle: relay
+
+button:
+  - platform: restart
+    id: restart_button
+    name: "Restart Device"
+    entity_category: diagnostic
+
+sensor:
+  - platform: uptime
+    id: uptime_seconds
+
+  - platform: wifi_signal
+    name: "WiFi Signal dB"
+    update_interval: 60s
+    entity_category: diagnostic
+
+text_sensor:
+  - platform: template
+    name: "Uptime"
+    icon: mdi:clock-start
+    entity_category: diagnostic
+    lambda: |-
+      uint32_t s = (uint32_t) id(uptime_seconds).state;
+      if (s == 0 || s > 315576000U) {
+        return {"Starting up"};
+      }
+      uint32_t d = s / 86400U; s %= 86400U;
+      uint8_t  h = s / 3600U; s %= 3600U;
+      uint8_t  m = s / 60U;   s %= 60U;
+      char buf[40];
+      if (d)       snprintf(buf, sizeof(buf), "%ud %uh %um %us", (unsigned)d, h, m, (unsigned)s);
+      else if (h)  snprintf(buf, sizeof(buf), "%uh %um %us", h, m, (unsigned)s);
+      else if (m)  snprintf(buf, sizeof(buf), "%um %us", m, (unsigned)s);
+      else         snprintf(buf, sizeof(buf), "%us", (unsigned)s);
+      return std::string(buf);
+
+  - platform: wifi_info
+    ip_address:
+      name: "IP Address"
+      entity_category: diagnostic
+    mac_address:
+      name: "MAC Address"
+      entity_category: diagnostic
+    ssid:
+      name: "Connected SSID"
+      entity_category: diagnostic

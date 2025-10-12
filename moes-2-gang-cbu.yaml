@@ -1,19 +1,19 @@
 substitutions:
-  name: "mj-s01-switch"
-  friendly_name: "Martin Jerry MJ-S01 (Single Pole switch)"
-  device_description: "Martin Jerry mj-s01 wifi switch"
-  project_name: "Martin Jerry.MJ-S01"
-  project_version: "v1.2.0"
+  name: "moes-2gang-switch"
+  friendly_name: "Moes 2-Gang switch"
+  device_description: "Moes 2-Gang WiFi switch"
+  project_name: "Moes.2-Gang-switch"
+  project_version: "v1.0.0"
   dns_domain: ".local"
   wifi_fast_connect: false
-  log_level: "DEBUG"
+  log_level: "INFO"
   ipv6_enable: false
-  icon: "mdi:ceiling-light"
-
+  icon_ceiling: "mdi:ceiling-light"
+  icon_strip: "mdi:led-strip-variant"
 
 esphome:
   name: ${name}
-  friendly_name: "${friendly_name}"
+  friendly_name: ${friendly_name}
   comment: "${device_description}"
   name_add_mac_suffix: true
   min_version: 2024.6.0
@@ -21,9 +21,8 @@ esphome:
     name: "${project_name}"
     version: "${project_version}"
 
-esp8266:
-  board: esp01_1m
-  restore_from_flash: false
+bk72xx:
+  board: cbu
 
 preferences:
   flash_write_interval: 10min
@@ -52,14 +51,13 @@ wifi:
   fast_connect: ${wifi_fast_connect}
   domain: "${dns_domain}"
 
-  power_save_mode: LIGHT
-  output_power: 17dB
+  power_save_mode: NONE
   reboot_timeout: 15min
 
   on_disconnect:
-    - switch.turn_on: red_led_blink
+    - switch.turn_on: wifi_blink
   on_connect:
-    - switch.turn_off: red_led_blink
+    - switch.turn_off: wifi_blink
 
 mdns:
   disabled: false
@@ -67,31 +65,38 @@ mdns:
 captive_portal:
 
 switch:
+  # Relay 1: Ceiling
   - platform: gpio
-    id: relay
-    name: "Light Switch"
-    icon: "${icon}"
-    pin: GPIO12
+    id: relay1
+    name: "Ceiling"
+    icon: "${icon_ceiling}"
+    pin: P24
     restore_mode: ALWAYS_OFF
-    on_turn_on:
-      - switch.turn_on: blue_led
-    on_turn_off:
-      - switch.turn_off: blue_led
 
+  # Relay 2: LED Strip
   - platform: gpio
-    id: blue_led
-    pin: GPIO05
+    id: relay2
+    name: "LED Strip"
+    icon: "${icon_strip}"
+    pin: P26
+    restore_mode: ALWAYS_OFF
+
+  # White LEDs for Wi‑Fi problem indication (active LOW)
+  - platform: gpio
+    id: white_led_ceiling
+    pin: P14
     inverted: true
     internal: true
 
   - platform: gpio
-    id: red_led
-    pin: GPIO04
+    id: white_led_strip
+    pin: P20
     inverted: true
     internal: true
 
+  # MJ‑S01‑style Wi‑Fi blink (blink both white LEDs when Wi‑Fi is disconnected)
   - platform: template
-    id: red_led_blink
+    id: wifi_blink
     internal: true
     lambda: |-
       return false;
@@ -101,25 +106,47 @@ switch:
             not:
               wifi.connected:
           then:
-            - switch.turn_on: red_led
+            - switch.turn_on: white_led_ceiling
+            - switch.turn_on: white_led_strip
             - delay: 500ms
-            - switch.turn_off: red_led
+            - switch.turn_off: white_led_ceiling
+            - switch.turn_off: white_led_strip
             - delay: 500ms
     turn_off_action:
-      - switch.turn_off: red_led
+      - switch.turn_off: white_led_ceiling
+      - switch.turn_off: white_led_strip
 
 binary_sensor:
+  # Button 1 (Ceiling): INPUT_PULLUP, active LOW
   - platform: gpio
-    id: main_button
+    id: button1
     pin:
-      number: GPIO13
-      mode: INPUT_PULLUP
+      number: P23
+      mode:
+        input: true
+        pullup: true
+      inverted: true
     internal: true
     filters:
       - delayed_on: 12ms
       - delayed_off: 12ms
     on_press:
-      - switch.toggle: relay
+      - switch.toggle: relay1
+
+  # Button 2 (Strip): INPUT, active HIGH
+  - platform: gpio
+    id: button2
+    pin:
+      number: P28
+      mode:
+        input: true
+      inverted: false
+    internal: true
+    filters:
+      - delayed_on: 12ms
+      - delayed_off: 12ms
+    on_press:
+      - switch.toggle: relay2
 
 button:
   - platform: restart
