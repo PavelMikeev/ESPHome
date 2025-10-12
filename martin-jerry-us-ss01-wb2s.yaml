@@ -102,7 +102,7 @@ captive_portal:
 
 # Allow adoption/import directly from GitHub
 dashboard_import:
-  package_import_url: "github://PavelMikeev/ESPHome/ESPHome/martin-jerry-us-ss01-wb2s.yaml"
+  package_import_url: "github://PavelMikeev/ESPHome/martin-jerry-us-ss01-wb2s.yaml"
 
 switch:
   - platform: gpio

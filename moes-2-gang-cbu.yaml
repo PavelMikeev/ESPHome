@@ -101,7 +101,7 @@ captive_portal:
 
 # Allow adoption/import directly from GitHub
 dashboard_import:
-  package_import_url: "github://PavelMikeev/ESPHome/ESPHome/moes-2-gang-cbu.yaml"
+  package_import_url: "github://PavelMikeev/ESPHome/moes-2-gang-cbu.yaml"
 
 switch:
   # Relay 1: Ceiling

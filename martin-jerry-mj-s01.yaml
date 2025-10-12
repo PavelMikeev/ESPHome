@@ -119,7 +119,7 @@ captive_portal:
 
 # Allow adoption/import directly from GitHub
 dashboard_import:
-  package_import_url: "github://PavelMikeev/ESPHome/ESPHome/martin-jerry-mj-s01.yaml"
+  package_import_url: "github://PavelMikeev/ESPHome/martin-jerry-mj-s01.yaml"
 
 # Switches: relay + LEDs and a template switch for Wi‑Fi blink
 switch:
