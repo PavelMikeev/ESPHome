@@ -1,15 +1,15 @@
 substitutions:
-  name: "mj-s01-switch"
-  friendly_name: "Martin Jerry MJ-S01 (Single Pole switch)"
-  device_description: "Martin Jerry mj-s01 wifi switch"
-  project_name: "Martin Jerry.MJ-S01"
-  project_version: "v1.2.0"
+  name: "mj-us-ss02"
+  friendly_name: "Martin Jerry US-SS02"
+  device_description: "US-SS02 fan switch with HDC1080 (ESP8266)"
+  project_name: "Martin Jerry.US-SS02"
+  project_version: "v1.0.0"
   dns_domain: ".local"
   wifi_fast_connect: false
-  log_level: "DEBUG"
+  log_level: "INFO"
   ipv6_enable: false
-  icon: "mdi:ceiling-light"
-
+  icon_fan: "mdi:fan"
+  icon_led: "mdi:led"
 
 esphome:
   name: ${name}
@@ -30,7 +30,7 @@ preferences:
 
 logger:
   level: ${log_level}
-  baud_rate: 0
+  baud_rate: 0    # RX0 used as button; disable UART logs
 
 api:
   reboot_timeout: 15min
@@ -66,12 +66,17 @@ mdns:
 
 captive_portal:
 
+i2c:
+  sda: GPIO13
+  scl: GPIO04
+  scan: true
+
 switch:
   - platform: gpio
     id: relay
-    name: "Light Switch"
-    icon: "${icon}"
-    pin: GPIO12
+    name: "Fan"
+    icon: "${icon_fan}"
+    pin: GPIO05
     restore_mode: ALWAYS_OFF
     on_turn_on:
       - switch.turn_on: blue_led
@@ -80,13 +85,13 @@ switch:
 
   - platform: gpio
     id: blue_led
-    pin: GPIO05
+    pin: GPIO14
     inverted: true
     internal: true
 
   - platform: gpio
     id: red_led
-    pin: GPIO04
+    pin: GPIO12
     inverted: true
     internal: true
 
@@ -112,8 +117,9 @@ binary_sensor:
   - platform: gpio
     id: main_button
     pin:
-      number: GPIO13
+      number: GPIO03
       mode: INPUT_PULLUP
+      inverted: true
     internal: true
     filters:
       - delayed_on: 12ms
@@ -121,13 +127,32 @@ binary_sensor:
     on_press:
       - switch.toggle: relay
 
-button:
-  - platform: restart
-    id: restart_button
-    name: "Restart Device"
-    entity_category: diagnostic
-
 sensor:
+  # HDC1080 temperature and humidity at 14-bit, with filtering/calibration hooks
+  - platform: hdc1080
+    address: 0x40
+    update_interval: 30s
+    temperature:
+      name: "Temperature"
+      id: temp
+      filters:
+        # Reduce noise and self-heating bias; tune offset after comparison
+        - sliding_window_moving_average:
+            window_size: 5
+            send_every: 1
+        # Example offset; adjust to your calibration (+/-)
+        # - offset: -0.3
+    humidity:
+      name: "Humidity"
+      id: hum
+      filters:
+        - sliding_window_moving_average:
+            window_size: 5
+            send_every: 1
+        - clamp:
+            min: 0
+            max: 100
+
   - platform: uptime
     id: uptime_seconds
 

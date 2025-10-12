@@ -1,15 +1,14 @@
 substitutions:
-  name: "mj-s01-switch"
-  friendly_name: "Martin Jerry MJ-S01 (Single Pole switch)"
-  device_description: "Martin Jerry mj-s01 wifi switch"
-  project_name: "Martin Jerry.MJ-S01"
-  project_version: "v1.2.0"
+  name: "mj-us-ss01-fan"
+  friendly_name: "Martin Jerry US-SS01 Fan (WB2S)"
+  device_description: "Martin Jerry US-SS01 WiFi fan"
+  project_name: "Martin Jerry.US-SS01-FAN"
+  project_version: "v1.0.0"
   dns_domain: ".local"
   wifi_fast_connect: false
-  log_level: "DEBUG"
+  log_level: "INFO"
   ipv6_enable: false
-  icon: "mdi:ceiling-light"
-
+  icon: "mdi:fan"
 
 esphome:
   name: ${name}
@@ -21,9 +20,8 @@ esphome:
     name: "${project_name}"
     version: "${project_version}"
 
-esp8266:
-  board: esp01_1m
-  restore_from_flash: false
+bk72xx:
+  board: wb2s
 
 preferences:
   flash_write_interval: 10min
@@ -52,8 +50,7 @@ wifi:
   fast_connect: ${wifi_fast_connect}
   domain: "${dns_domain}"
 
-  power_save_mode: LIGHT
-  output_power: 17dB
+  power_save_mode: NONE
   reboot_timeout: 15min
 
   on_disconnect:
@@ -69,9 +66,10 @@ captive_portal:
 switch:
   - platform: gpio
     id: relay
-    name: "Light Switch"
+    name: "Fan Switch"
     icon: "${icon}"
-    pin: GPIO12
+    pin: P8
+    internal: true
     restore_mode: ALWAYS_OFF
     on_turn_on:
       - switch.turn_on: blue_led
@@ -80,13 +78,13 @@ switch:
 
   - platform: gpio
     id: blue_led
-    pin: GPIO05
+    pin: P26
     inverted: true
     internal: true
 
   - platform: gpio
     id: red_led
-    pin: GPIO04
+    pin: P24
     inverted: true
     internal: true
 
@@ -112,14 +110,27 @@ binary_sensor:
   - platform: gpio
     id: main_button
     pin:
-      number: GPIO13
-      mode: INPUT_PULLUP
+      number: P10
+      mode:
+        input: true
+        pullup: true
+      inverted: true
     internal: true
     filters:
       - delayed_on: 12ms
       - delayed_off: 12ms
     on_press:
-      - switch.toggle: relay
+      - fan.toggle: fan_entity
+
+fan:
+  - platform: template
+    name: "Fan"
+    id: fan_entity
+    icon: "mdi:fan"
+    on_turn_on:
+      - switch.turn_on: relay
+    on_turn_off:
+      - switch.turn_off: relay
 
 button:
   - platform: restart
