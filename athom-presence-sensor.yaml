@@ -34,7 +34,7 @@ esphome:
   comment: "${device_description}"
   area: "${room}"
   name_add_mac_suffix: true
-  min_version: 2024.6.0
+  min_version: 2025.9.3
   project:
     name: "${project_name}"
     version: "${project_version}"

@@ -1,9 +1,44 @@
+#
+# Martin Jerry US‑SS02 ESPHome configuration (Adoptable)
+#
+# Purpose
+#   Fan controller with HDC1080 (temperature/humidity) on ESP8266 (esp01_1m)
+#   Native Fan entity (domain: fan). The relay is driven via a GPIO output.
+#   Physical button toggles the fan and sets a flag manual_fan_triggered used in automations.
+#   Wi‑Fi/AP, OTA, API, web UI; robust recovery and reduced flash wear.
+#
+# Hardware pin map (US‑SS02 reference)
+#   Relay (Fan):      GPIO05 (active HIGH)
+#   Blue LED (Fan):   GPIO14 (active LOW, inverted) follows fan state
+#   Red LED (Status): GPIO12 (active LOW, inverted) blinks on Wi‑Fi loss
+#   Button:           GPIO03/RX0 (INPUT_PULLUP, active LOW)
+#   I²C (HDC1080):    SDA GPIO13, SCL GPIO04, addr 0x40
+#
+# Secrets you MUST provide yourself
+#   wifi_ssid and wifi_password are referenced with !secret below and must be defined
+#   by you in your ESPHome/Home Assistant secrets.yaml. Example:
+#     wifi_ssid: "MyHomeWiFi"
+#     wifi_password: "super_secret_password"
+#   If you do not use secrets, replace the !secret lines with literal strings.
+#
+# Behavior & reliability
+#   logger.baud_rate is 0 because RX0 is used as a button input.
+#   api.reboot_timeout and wifi.reboot_timeout help self‑recover from long outages.
+#   preferences.flash_write_interval (10 min) limits flash wear.
+#   HDC1080 readings are smoothed; both metrics report with 1 decimal place.
+#   manual_fan_triggered is set to true only by the physical button; a template sensor
+#   exposes it as 1/0 for automations.
+#
+# Adoption via ESPHome Dashboard
+#   Add/update the dashboard_import URL pointing at your public GitHub file so the device
+#   can be discovered and adopted from the ESPHome Dashboard.
+#
 substitutions:
   name: "mj-us-ss02"
   friendly_name: "Martin Jerry US-SS02"
   device_description: "US-SS02 fan switch with HDC1080 (ESP8266)"
-  project_name: "Martin Jerry.US-SS02"
-  project_version: "v1.0.0"
+  project_name: "Martin_Jerry.US_SS02"
+  project_version: "v1.1.2"
   dns_domain: ".local"
   wifi_fast_connect: false
   log_level: "INFO"
@@ -16,7 +51,7 @@ esphome:
   friendly_name: ${friendly_name}
   comment: "${device_description}"
   name_add_mac_suffix: true
-  min_version: 2024.6.0
+  min_version: 2025.9.3
   project:
     name: "${project_name}"
     version: "${project_version}"
@@ -66,23 +101,28 @@ mdns:
 
 captive_portal:
 
+# Allow adoption/import directly from GitHub
+dashboard_import:
+  package_import_url: "github://PavelMikeev/ESPHome/martin-jerry-us-ss02.yaml@main"
+  import_full_config: true
+
 i2c:
   sda: GPIO13
   scl: GPIO04
   scan: true
 
-switch:
+globals:
+  - id: manual_fan_triggered
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+output:
   - platform: gpio
     id: relay
-    name: "Fan"
-    icon: "${icon_fan}"
     pin: GPIO05
-    restore_mode: ALWAYS_OFF
-    on_turn_on:
-      - switch.turn_on: blue_led
-    on_turn_off:
-      - switch.turn_off: blue_led
 
+switch:
   - platform: gpio
     id: blue_led
     pin: GPIO14
@@ -125,7 +165,22 @@ binary_sensor:
       - delayed_on: 12ms
       - delayed_off: 12ms
     on_press:
-      - switch.toggle: relay
+      - globals.set:
+          id: manual_fan_triggered
+          value: 'true'
+      - fan.toggle: bathroom_vent_fan
+
+fan:
+  - platform: binary
+    id: bathroom_vent_fan
+    name: "Vent Fan"
+    icon: "mdi:fan"
+    output: relay
+    restore_mode: ALWAYS_OFF
+    on_turn_on:
+      - switch.turn_on: blue_led
+    on_turn_off:
+      - switch.turn_off: blue_led
 
 sensor:
   # HDC1080 temperature and humidity at 14-bit, with filtering/calibration hooks
@@ -135,6 +190,8 @@ sensor:
     temperature:
       name: "Temperature"
       id: temp
+      icon: mdi:thermometer
+      accuracy_decimals: 1
       filters:
         # Reduce noise and self-heating bias; tune offset after comparison
         - sliding_window_moving_average:
@@ -145,13 +202,25 @@ sensor:
     humidity:
       name: "Humidity"
       id: hum
+      icon: mdi:water-percent
+      accuracy_decimals: 1
       filters:
         - sliding_window_moving_average:
             window_size: 5
             send_every: 1
-        - clamp:
-            min: 0
-            max: 100
+        - lambda: |-
+            if (x < 0.0f) return 0.0f;
+            if (x > 100.0f) return 100.0f;
+            return x;
+
+  - platform: template
+    name: "Manual Fan Triggered"
+    id: manual_trigger_sensor
+    lambda: |-
+      return id(manual_fan_triggered) ? 1.0 : 0.0;
+    update_interval: 5s
+    unit_of_measurement: "bool"
+    accuracy_decimals: 0
 
   - platform: uptime
     id: uptime_seconds
@@ -162,6 +231,17 @@ sensor:
     entity_category: diagnostic
 
 text_sensor:
+  - platform: template
+    name: "Firmware Version"
+    icon: mdi:chip
+    entity_category: diagnostic
+    lambda: |-
+      return std::string("${project_version}");
+
+  - platform: version
+    name: "ESPHome Version"
+    entity_category: diagnostic
+
   - platform: template
     name: "Uptime"
     icon: mdi:clock-start
@@ -182,12 +262,22 @@ text_sensor:
       return std::string(buf);
 
   - platform: wifi_info
+    ssid:
+      name: "Connected SSID"
+      entity_category: diagnostic
     ip_address:
       name: "IP Address"
       entity_category: diagnostic
     mac_address:
       name: "MAC Address"
       entity_category: diagnostic
-    ssid:
-      name: "Connected SSID"
-      entity_category: diagnostic
+
+button:
+  - platform: restart
+    id: restart_button
+    name: "Restart"
+    entity_category: config
+
+  - platform: factory_reset
+    name: "Factory Reset"
+    entity_category: config

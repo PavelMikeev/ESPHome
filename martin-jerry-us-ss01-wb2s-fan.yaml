@@ -34,8 +34,8 @@ substitutions:
   name: "mj-us-ss01-fan"
   friendly_name: "Martin Jerry US-SS01 Fan (WB2S)"
   device_description: "Martin Jerry US-SS01 WiFi fan"
-  project_name: "Martin Jerry.US-SS01-FAN"
-  project_version: "v1.0.0"
+  project_name: "Martin_Jerry.US_SS01_FAN"
+  project_version: "v1.1.2"
   dns_domain: ".local"
   wifi_fast_connect: false
   log_level: "INFO"
@@ -47,7 +47,7 @@ esphome:
   friendly_name: ${friendly_name}
   comment: "${device_description}"
   name_add_mac_suffix: true
-  min_version: 2024.6.0
+  min_version: 2025.9.3
   project:
     name: "${project_name}"
     version: "${project_version}"
@@ -97,7 +97,8 @@ captive_portal:
 
 # Allow adoption/import directly from GitHub
 dashboard_import:
-  package_import_url: "github://PavelMikeev/ESPHome/martin-jerry-us-ss01-wb2s-fan.yaml"
+  package_import_url: "github://PavelMikeev/ESPHome/martin-jerry-us-ss01-wb2s-fan.yaml@main"
+  import_full_config: true
 
 switch:
   - platform: gpio
@@ -171,8 +172,12 @@ fan:
 button:
   - platform: restart
     id: restart_button
-    name: "Restart Device"
-    entity_category: diagnostic
+    name: "Restart"
+    entity_category: config
+
+  - platform: factory_reset
+    name: "Factory Reset"
+    entity_category: config
 
 sensor:
   - platform: uptime
@@ -184,6 +189,17 @@ sensor:
     entity_category: diagnostic
 
 text_sensor:
+  - platform: template
+    name: "Firmware Version"
+    icon: mdi:chip
+    entity_category: diagnostic
+    lambda: |-
+      return std::string("${project_version}");
+
+  - platform: version
+    name: "ESPHome Version"
+    entity_category: diagnostic
+
   - platform: template
     name: "Uptime"
     icon: mdi:clock-start
@@ -204,12 +220,12 @@ text_sensor:
       return std::string(buf);
 
   - platform: wifi_info
+    ssid:
+      name: "Connected SSID"
+      entity_category: diagnostic
     ip_address:
       name: "IP Address"
       entity_category: diagnostic
     mac_address:
       name: "MAC Address"
-      entity_category: diagnostic
-    ssid:
-      name: "Connected SSID"
       entity_category: diagnostic
