@@ -1,0 +1,214 @@
+# These substitutions allow the end user to override certain values
+substitutions:
+  name: air-conditioner
+  friendly_name: "Air Conditioner"
+  
+  # Additional substitutions could be added here to make it really easy for the user to override defaults.
+  # I am adding a some for example purposes.
+  visual_min_temperature: "17 °C"
+  visual_max_temperature: "30 °C"
+  visual_temperature_step: "0.5 °C"
+  project_version: "2.1"
+  
+
+esphome:
+  name: "${name}"
+  # Friendly names are used where appropriate in Home Assistant
+  friendly_name: "${friendly_name}"
+  # Automatically add the mac address to the name
+  # so you can use a single firmware for all devices
+  name_add_mac_suffix: true
+  min_version: 2025.9.3
+
+  # This will allow for (future) project identification,
+  # configuration and updates.
+  project:
+    name: SMLIGHT.SLWF-01Pro
+    version: "${project_version}"
+
+esp8266:
+  board: esp12e
+
+# Reduce flash wear by batching non-volatile writes
+preferences:
+  flash_write_interval: 10min
+
+# This should point to the public location of this yaml file.
+#dashboard_import:
+#  package_import_url: github://smlight-dev/slwf-01pro/slwf-01pro-v2.yaml
+#  import_full_config: false # or true
+
+wifi:
+  # Enable fallback hotspot (captive portal) in case Wi‑Fi fails
+  # Use default ESPHome AP name (<name>-XXXXXX) and no password
+  ap: {}
+
+  # Prefer fast reconnection to a specific AP (reduces scans)
+  networks:
+    - ssid: !secret wifi_ssid
+      password: !secret wifi_password
+      bssid: !secret wifi_bssid
+  fast_connect: true
+
+  # Self‑recovery if Wi‑Fi stays down ~15 minutes
+  reboot_timeout: 15min
+
+mdns:
+  disabled: false
+
+captive_portal:
+
+# Allow adoption/import directly from GitHub
+dashboard_import:
+  package_import_url: "github://PavelMikeev/ESPHome/slwf01pro.yaml@main"
+  import_full_config: true
+
+# Built-in device web UI (disabled; rely on captive portal during fallback AP)
+#web_server:
+#  port: 80
+
+# Enable logging
+logger:
+  baud_rate: 0
+
+# Enable Home Assistant API
+api:
+  reboot_timeout: 15min
+  services:
+    - service: follow_me
+      variables:
+        temperature: float
+      then:
+        midea_ac.follow_me:
+          temperature: !lambda "return temperature;"
+          beeper: false
+ota:
+  - platform: esphome
+
+uart:
+  tx_pin: 12
+  rx_pin: 14
+  baud_rate: 9600
+  
+button:
+  - platform: restart
+    name: Restart
+    entity_category: config
+
+  - platform: factory_reset
+    id: factory_reset_btn
+    name: Factory Reset
+    entity_category: config
+# "Display toggle" button
+  - platform: template
+    name: ${friendly_name} Display Toggle
+    id: midea_display_toggle
+    icon: mdi:theme-light-dark
+    on_press:
+      - midea_ac.display_toggle:
+# "Swing step" button
+  - platform: template
+    name: ${friendly_name} Swing Step
+    id: midea_swing_step
+    icon: mdi:tailwind
+    on_press:
+      - midea_ac.swing_step:
+
+
+climate:
+  - platform: midea
+    name: ${friendly_name}                            # The value of "friendly_name" will be used here
+    id: midea_climate                           
+    period: 1s                                        # Slightly lower bus/CPU load
+    timeout: 2s                                       # Optional
+    num_attempts: 3                                   # Optional
+    autoconf: false                                   # Use explicit capability lists below
+    beeper: true                                      # Beep on commands.
+    visual:                                           # Optional. Example of visual settings override.
+      min_temperature: "${visual_min_temperature}"    # min: 17
+      max_temperature: "${visual_max_temperature}"    # max: 30
+      temperature_step: "${visual_temperature_step}"  # min: 0.5
+    supported_modes:            # Optional. All capabilities in this section may be detected by autoconf.
+      - FAN_ONLY
+      - HEAT_COOL
+      - COOL
+      - HEAT
+      - DRY
+    custom_fan_modes:           # Optional
+      - SILENT
+      - TURBO
+    supported_presets:          # Optional. All capabilities in this section may be detected by autoconf.
+      - ECO
+      - BOOST
+      - SLEEP
+    custom_presets:             # Optional. All capabilities in this section may be detected by autoconf.
+      - FREEZE_PROTECTION
+    supported_swing_modes:
+      - VERTICAL
+      - HORIZONTAL
+      - BOTH
+    outdoor_temperature:        # Optional. Outdoor temperature sensor (may display incorrect values after long inactivity).
+      name: ${friendly_name} Outdoor Temperature
+
+switch:
+  - platform: template
+    name: ${friendly_name} Beeper
+    id: midea_beeper
+    icon: mdi:volume-source
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: true
+    turn_on_action:
+      - midea_ac.beeper_on:
+    turn_off_action:
+      - midea_ac.beeper_off:
+
+## IR remote transmitter not used in this setup (removed)
+
+sensor:
+  # External room temperature from Home Assistant for Follow Me
+  - platform: homeassistant
+    id: follow_me_sensor
+    entity_id: sensor.therm_pavel_temperature
+    internal: true
+    filters:
+      - throttle: 30s
+      - heartbeat: 2min
+      - debounce: 1s
+    on_value:
+      then:
+        - if:
+            condition:
+              lambda: |-
+                return !isnan(x) && x > -20.0f && x < 60.0f;
+            then:
+              - midea_ac.follow_me:
+                  temperature: !lambda "return x;"
+                  beeper: false
+  - platform: wifi_signal
+    name: ${friendly_name} Wi-Fi Signal
+    update_interval: 60s
+    entity_category: diagnostic
+  - platform: uptime
+    name: "Uptime"
+    id: uptime_sec
+    internal: true
+  - platform: template
+    name: ${friendly_name} Uptime Days
+    lambda: |-
+      return (id(uptime_sec).state/60)/60/24;
+    icon: mdi:clock-start
+    unit_of_measurement: days
+    update_interval: 1min
+    disabled_by_default: true
+
+text_sensor:
+  - platform: template
+    name: "Firmware Version"
+    icon: mdi:chip
+    entity_category: diagnostic
+    lambda: |-
+      return std::string("${project_version}");
+
+  - platform: version
+    name: "ESPHome Version"
+    entity_category: diagnostic
